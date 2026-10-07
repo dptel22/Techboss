@@ -1,5 +1,24 @@
 # TechBoss Agent Collaboration Log
 
+## [2026-10-07 14:00] — Gemini (Role-Based Access Control & Login Implementation)
+- **Status:** Complete & Verified
+- **Completed:**
+  - Implemented Role-Based Access Control (RBAC) plan in `src/App.tsx` and `src/index.css`:
+    1. **Two Roles & Preset Users**:
+       - `admin`: "Big Boss Director" (Full executive authority to add contestants, modify points, appoint captain, nominate, evict, assign tasks, control timer, and broadcast).
+       - `user`: "Housemate Viewer" (Read-only surveillance mode: view live leaderboard, statistics, danger zone, active tasks, broadcast feed).
+    2. **Dedicated Login Screen (`LoginPage`)**:
+       - 1-Click quick login buttons for instant testing (`[ 👑 Admin Access ]` and `[ 👤 User / Viewer ]`).
+       - Credential form supporting `admin` / `admin` and `user` / `user` with validation feedback.
+    3. **Dynamic Dashboard Differentiation**:
+       - **Topbar**: Active role indicator badge (`👑 ADMIN` vs `👤 VIEWER`), quick 1-click `[ Switch to User / Admin ]` role toggle, profile circle, and Sign out button.
+       - **Sidebar**: Role badge display and functional `Sign out` button.
+       - **Greeting & Banners**: Greeting adapts dynamically; Viewer Mode shows an informative surveillance banner explaining restricted permissions with a 1-click switch button.
+       - **Permission Enforcement**: Point modifications, evictions, captain assignments, nominations, task creations, and timer controls are disabled or hidden with "Admin Only" indicators when in User/Viewer mode.
+    4. **Persistence**: Active session persisted to `localStorage` (`techboss_user`).
+- **Next Steps:**
+  - Review with team and push updates to git remote.
+
 ## [2026-10-07 10:23] — Gemini (Frontend & Full Feature Integration)
 - **Status:** Complete & Verified
 - **Completed:**

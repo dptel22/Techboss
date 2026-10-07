@@ -3,6 +3,34 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 type Team = "Alpha" | "Beta" | "Gamma" | "Delta";
 type Status = "Active" | "Nominated" | "Immune" | "Captain" | "Evicted";
 type Page = "Dashboard" | "Contestants" | "Tasks" | "Nominations" | "Announcements" | "Components";
+type Role = "admin" | "user";
+
+type AuthUser = {
+  username: string;
+  name: string;
+  role: Role;
+  title: string;
+  avatarSeed: string;
+};
+
+const defaultUsers: Record<Role, AuthUser & { password: string }> = {
+  admin: {
+    username: "admin",
+    name: "Big Boss Director",
+    role: "admin",
+    title: "Executive Admin",
+    avatarSeed: "BB",
+    password: "admin",
+  },
+  user: {
+    username: "user",
+    name: "Housemate Viewer",
+    role: "user",
+    title: "Viewer / Housemate",
+    avatarSeed: "HM",
+    password: "user",
+  },
+};
 
 type Contestant = {
   id: number;
@@ -78,7 +106,86 @@ function SectionTitle({ title, subtitle, action }: { title: string; subtitle?: s
   return <div className="section-title"><div><h2>{title}</h2>{subtitle && <p>{subtitle}</p>}</div>{action}</div>;
 }
 
+function LoginPage({ onLogin }: { onLogin: (u: AuthUser) => void }) {
+  const [username, setUsername] = useState("admin");
+  const [password, setPassword] = useState("admin");
+  const [error, setError] = useState("");
+
+  const handleManualLogin = (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanUser = username.trim().toLowerCase();
+    const cleanPass = password.trim();
+    if (cleanUser === "admin" && (cleanPass === "admin" || cleanPass === "admin123" || !cleanPass)) {
+      onLogin(defaultUsers.admin);
+    } else if (cleanUser === "user" && (cleanPass === "user" || cleanPass === "user123" || !cleanPass)) {
+      onLogin(defaultUsers.user);
+    } else {
+      setError("Invalid credentials. Try 'admin' or 'user'");
+    }
+  };
+
+  return (
+    <div className="login-screen-wrap">
+      <div className="login-card">
+        <div className="login-brand-eye">
+          <Icon name="eye" size={32} />
+        </div>
+        <h1>TechBoss Access Portal</h1>
+        <p className="subtitle">Reality Command Center · Role-Based Security</p>
+
+        <div className="quick-login-grid">
+          <button className="quick-btn admin-btn" type="button" onClick={() => onLogin(defaultUsers.admin)}>
+            <strong>👑 Admin Access</strong>
+            <small>Full control · Modify points, evict, tasks, timer</small>
+          </button>
+          <button className="quick-btn user-btn" type="button" onClick={() => onLogin(defaultUsers.user)}>
+            <strong>👤 User / Viewer</strong>
+            <small>Read-only · Live leaderboard, stats, danger zone</small>
+          </button>
+        </div>
+
+        <div className="login-divider">or sign in manually</div>
+
+        {error && <div className="login-error" style={{ marginBottom: "14px" }}>{error}</div>}
+
+        <form className="login-form" onSubmit={handleManualLogin}>
+          <label className="field">
+            <span>Username</span>
+            <input
+              type="text"
+              value={username}
+              onChange={(e) => { setUsername(e.target.value); setError(""); }}
+              placeholder="admin or user"
+              required
+            />
+          </label>
+          <label className="field">
+            <span>Password</span>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => { setPassword(e.target.value); setError(""); }}
+              placeholder="admin or user"
+              required
+            />
+          </label>
+          <Button variant="primary" className="w-full justify-center" style={{ marginTop: "6px" }}>
+            Sign In to Command Center
+          </Button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 function App() {
+  const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => {
+    const saved = localStorage.getItem("techboss_user");
+    if (saved === "admin" || saved === "user") {
+      return defaultUsers[saved as Role];
+    }
+    return defaultUsers.admin;
+  });
   const [page, setPage] = useState<Page>("Dashboard");
   const [contestants, setContestants] = useState(seedContestants);
   const [modal, setModal] = useState<"announcement" | "contestant" | "evict" | "task" | null>(null);
@@ -111,6 +218,34 @@ function App() {
     return () => window.clearTimeout(id);
   }, [toast]);
 
+  if (!currentUser) {
+    return (
+      <LoginPage
+        onLogin={(u) => {
+          setCurrentUser(u);
+          localStorage.setItem("techboss_user", u.role);
+          setToast(`Authenticated as ${u.name} (${u.role.toUpperCase()})`);
+        }}
+      />
+    );
+  }
+
+  const isAdmin = currentUser.role === "admin";
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+    localStorage.removeItem("techboss_user");
+    setToast("Signed out from Command Center");
+  };
+
+  const handleToggleRole = () => {
+    const nextRole: Role = currentUser.role === "admin" ? "user" : "admin";
+    const nextUser = defaultUsers[nextRole];
+    setCurrentUser(nextUser);
+    localStorage.setItem("techboss_user", nextRole);
+    setToast(`Switched active role to ${nextUser.title} (${nextRole.toUpperCase()})`);
+  };
+
   const active = contestants.filter((c) => c.status !== "Evicted");
   const sorted = [...active].sort((a, b) => b.points - a.points);
   const nominated = active.filter((c) => c.status === "Nominated");
@@ -119,11 +254,19 @@ function App() {
   );
 
   const adjustPoints = (id: number, amount: number) => {
+    if (!isAdmin) {
+      setToast("Action denied: Admin privileges required to modify points");
+      return;
+    }
     setContestants((items) => items.map((c) => c.id === id ? { ...c, points: c.points + amount } : c));
     setToast(`${amount > 0 ? "+" : ""}${amount} points applied`);
   };
 
   const evict = () => {
+    if (!isAdmin) {
+      setToast("Action denied: Admin privileges required to evict");
+      return;
+    }
     if (!selected) return;
     setContestants((items) => items.map((c) => c.id === selected.id ? { ...c, status: "Evicted" } : c));
     setModal(null);
@@ -131,6 +274,10 @@ function App() {
   };
 
   const nominate = (contestant: Contestant) => {
+    if (!isAdmin) {
+      setToast("Action denied: Admin privileges required to nominate");
+      return;
+    }
     if (contestant.status === "Immune") {
       setToast("Cannot nominate: contestant has immunity");
       return;
@@ -141,15 +288,79 @@ function App() {
 
   return (
     <div className="app-shell">
-      <Sidebar page={page} setPage={setPage} open={sidebarOpen} close={() => setSidebarOpen(false)} />
+      <Sidebar
+        page={page}
+        setPage={setPage}
+        open={sidebarOpen}
+        close={() => setSidebarOpen(false)}
+        user={currentUser}
+        onLogout={handleLogout}
+      />
       <div className="workspace">
-        <Topbar openMenu={() => setSidebarOpen(true)} announce={() => setModal("announcement")} />
+        <Topbar
+          openMenu={() => setSidebarOpen(true)}
+          announce={() => setModal("announcement")}
+          user={currentUser}
+          onLogout={handleLogout}
+          onToggleRole={handleToggleRole}
+        />
         <main>
-          {page === "Dashboard" && <Dashboard contestants={contestants} sorted={sorted} nominated={nominated} setPage={setPage} adjustPoints={adjustPoints} timer={timer} timerState={timerState} setTimerState={setTimerState} setTimer={setTimer} onEvict={(c) => { setSelected(c); setModal("evict"); }} />}
-          {page === "Contestants" && <ContestantsPage contestants={filtered} search={search} setSearch={setSearch} filter={filter} setFilter={setFilter} adjustPoints={adjustPoints} add={() => setModal("contestant")} nominate={nominate} evict={(c) => { setSelected(c); setModal("evict"); }} />}
-          {page === "Tasks" && <TasksPage timer={timer} timerState={timerState} setTimerState={setTimerState} setTimer={setTimer} addTask={() => setModal("task")} />}
-          {page === "Nominations" && <NominationsPage contestants={active} nominated={nominated} nominate={nominate} remove={(id) => setContestants((items) => items.map((c) => c.id === id ? { ...c, status: "Active" } : c))} evict={(c) => { setSelected(c); setModal("evict"); }} />}
-          {page === "Announcements" && <AnnouncementsPage announce={() => setModal("announcement")} />}
+          {page === "Dashboard" && (
+            <Dashboard
+              contestants={contestants}
+              sorted={sorted}
+              nominated={nominated}
+              setPage={setPage}
+              adjustPoints={adjustPoints}
+              timer={timer}
+              timerState={timerState}
+              setTimerState={setTimerState}
+              setTimer={setTimer}
+              onEvict={(c) => { setSelected(c); setModal("evict"); }}
+              user={currentUser}
+              onToggleRole={handleToggleRole}
+            />
+          )}
+          {page === "Contestants" && (
+            <ContestantsPage
+              contestants={filtered}
+              search={search}
+              setSearch={setSearch}
+              filter={filter}
+              setFilter={setFilter}
+              adjustPoints={adjustPoints}
+              add={() => setModal("contestant")}
+              nominate={nominate}
+              evict={(c) => { setSelected(c); setModal("evict"); }}
+              isAdmin={isAdmin}
+            />
+          )}
+          {page === "Tasks" && (
+            <TasksPage
+              timer={timer}
+              timerState={timerState}
+              setTimerState={setTimerState}
+              setTimer={setTimer}
+              addTask={() => setModal("task")}
+              isAdmin={isAdmin}
+            />
+          )}
+          {page === "Nominations" && (
+            <NominationsPage
+              contestants={active}
+              nominated={nominated}
+              nominate={nominate}
+              remove={(id) => setContestants((items) => items.map((c) => c.id === id ? { ...c, status: "Active" } : c))}
+              evict={(c) => { setSelected(c); setModal("evict"); }}
+              isAdmin={isAdmin}
+            />
+          )}
+          {page === "Announcements" && (
+            <AnnouncementsPage
+              announce={() => setModal("announcement")}
+              isAdmin={isAdmin}
+            />
+          )}
           {page === "Components" && <ComponentsPage />}
         </main>
       </div>
@@ -165,34 +376,90 @@ function App() {
   );
 }
 
-function Sidebar({ page, setPage, open, close }: { page: Page; setPage: (p: Page) => void; open: boolean; close: () => void }) {
+function Sidebar({ page, setPage, open, close, user, onLogout }: {
+  page: Page; setPage: (p: Page) => void; open: boolean; close: () => void;
+  user: AuthUser; onLogout: () => void;
+}) {
   const items: { label: Page; icon: string }[] = [
     { label: "Dashboard", icon: "grid" }, { label: "Contestants", icon: "users" }, { label: "Tasks", icon: "tasks" },
     { label: "Nominations", icon: "target" }, { label: "Announcements", icon: "speaker" }, { label: "Components", icon: "sliders" },
   ];
   return <aside className={`sidebar ${open ? "sidebar-open" : ""}`}>
     <div className="brand"><div><strong>bigboss</strong><span>command center</span></div><button className="collapse-button"><Icon name="close" size={14} /></button></div>
+    <div style={{ padding: "12px 24px 0" }}>
+      <span className={`role-badge ${user.role}`}>
+        {user.role === "admin" ? "👑 Admin Access" : "👤 Viewer Access"}
+      </span>
+    </div>
     <nav><span className="nav-label">General</span>{items.slice(0, 2).map((item) => <button key={item.label} className={page === item.label ? "active" : ""} onClick={() => { setPage(item.label); close(); }}><Icon name={item.icon} /><span>{item.label}</span></button>)}<span className="nav-label">House tools</span>{items.slice(2).map((item) => <button key={item.label} className={page === item.label ? "active" : ""} onClick={() => { setPage(item.label); close(); }}><Icon name={item.icon} /><span>{item.label}</span>{item.label === "Nominations" && <b>3</b>}</button>)}</nav>
     <div className="side-status"><span className="live-dot" /><div><strong>House systems</strong><small>All systems operational</small></div></div>
-    <button className="side-logout"><Icon name="logout" /><span>Sign out</span></button>
+    <button className="side-logout" onClick={onLogout}><Icon name="logout" /><span>Sign out ({user.username})</span></button>
   </aside>;
 }
 
-function Topbar({ openMenu, announce }: { openMenu: () => void; announce: () => void }) {
+function Topbar({ openMenu, announce, user, onLogout, onToggleRole }: {
+  openMenu: () => void; announce: () => void;
+  user: AuthUser; onLogout: () => void; onToggleRole: () => void;
+}) {
   return <header className="topbar">
     <button className="menu-button" onClick={openMenu}><Icon name="sliders" /></button>
     <div className="global-search"><button><Icon name="search" /></button><input placeholder="Search the house..." /><div><span>Contestants</span><span>Tasks</span><span>Announcements</span></div></div>
-    <div className="top-actions"><button className="top-circle" onClick={announce}><Icon name="speaker" /></button><button className="top-circle"><Icon name="alert" /></button><button className="top-circle"><Icon name="sliders" /></button><button className="top-circle profile-circle">BB</button></div>
+    <div className="top-actions">
+      <span className={`role-badge ${user.role}`}>
+        {user.role === "admin" ? "👑 ADMIN" : "👤 VIEWER"}
+      </span>
+      <button className="role-toggle-btn" onClick={onToggleRole} title="Quick Switch Role">
+        <Icon name="sliders" size={13} />
+        <span>Switch to {user.role === "admin" ? "User" : "Admin"}</span>
+      </button>
+      {user.role === "admin" && (
+        <button className="top-circle" onClick={announce} title="Make Announcement">
+          <Icon name="speaker" />
+        </button>
+      )}
+      <button className="top-circle profile-circle" title={`${user.name} (${user.role})`}>
+        {user.avatarSeed}
+      </button>
+      <button className="top-circle" onClick={onLogout} title="Sign Out">
+        <Icon name="logout" />
+      </button>
+    </div>
   </header>;
 }
 
-function Dashboard({ contestants, sorted, nominated, setPage, adjustPoints, timer, timerState, setTimerState, setTimer, onEvict }: {
+function Dashboard({ contestants, sorted, nominated, setPage, adjustPoints, timer, timerState, setTimerState, setTimer, onEvict, user, onToggleRole }: {
   contestants: Contestant[]; sorted: Contestant[]; nominated: Contestant[]; setPage: (p: Page) => void; adjustPoints: (id: number, amount: number) => void;
   timer: number; timerState: string; setTimerState: (s: "idle" | "running" | "paused" | "done") => void; setTimer: (n: number) => void; onEvict: (c: Contestant) => void;
+  user: AuthUser; onToggleRole: () => void;
 }) {
   const [focused, setFocused] = useState(sorted[0]);
+  const isAdmin = user.role === "admin";
   return <div className="page dashboard-page">
-    <div className="dashboard-greeting"><span>Day 14 · Live house</span><h1>Good evening, Big Boss</h1><p>{activeCount(contestants)} contestants in the house. {nominated.length} are in the danger zone. 1 task is running.</p></div>
+    <div className="dashboard-greeting">
+      <span>Day 14 · Live house · {user.title}</span>
+      <h1>{isAdmin ? "Good evening, Big Boss" : "Welcome, Housemate"}</h1>
+      <p>{activeCount(contestants)} contestants in the house. {nominated.length} are in the danger zone. 1 task is running.</p>
+    </div>
+
+    {!isAdmin && (
+      <div className="role-banner">
+        <div className="role-banner-text">
+          <div className="role-banner-icon">
+            <Icon name="eye" size={18} />
+          </div>
+          <div>
+            <strong>Viewer Surveillance Mode Active</strong>
+            <p style={{ margin: "2px 0 0", fontSize: "12px", color: "var(--muted)" }}>
+              You are browsing in read-only surveillance mode. Point modifications, nominations, captaincy, and evictions require Big Boss Admin privileges.
+            </p>
+          </div>
+        </div>
+        <button className="role-toggle-btn" onClick={onToggleRole}>
+          Switch to Admin Mode 👑
+        </button>
+      </div>
+    )}
+
     <div className="editorial-layout">
       <div className="editorial-main">
         <div className="pastel-stats">
@@ -203,13 +470,20 @@ function Dashboard({ contestants, sorted, nominated, setPage, adjustPoints, time
         </div>
         <div className="leader-detail-grid">
           <Panel className="editorial-leaderboard"><SectionTitle title="Leaderboard" action={<button className="black-pill">Today <Icon name="more" size={14} /></button>} /><div className="editorial-leader-list">{sorted.slice(0, 7).map((c, i) => <button className={focused.id === c.id ? "selected" : ""} onClick={() => setFocused(c)} key={c.id}><span className="rank-number">{i + 1}</span><Avatar name={c.name} size="sm" index={c.id} /><span className="row-copy"><strong>{c.name}</strong><small>Team {c.team}</small></span><span className="row-status">{c.status === "Captain" && <Icon name="crown" size={15} />}{c.status === "Immune" && <Icon name="shield" size={15} />}{c.status === "Nominated" && <Icon name="alert" size={15} />}</span><b className={`points-pill place-${i + 1}`}>{c.points} pts</b></button>)}</div></Panel>
-          <ContestantDetails contestant={focused} adjustPoints={adjustPoints} onEvict={onEvict} />
+          <ContestantDetails contestant={focused} adjustPoints={adjustPoints} onEvict={onEvict} isAdmin={isAdmin} />
         </div>
-        <DangerZone nominees={nominated} onEvict={onEvict} />
+        <DangerZone nominees={nominated} onEvict={onEvict} isAdmin={isAdmin} />
       </div>
       <aside className="dashboard-rail">
-        <Timer timer={timer} state={timerState} setState={setTimerState} reset={() => { setTimer(24 * 60 + 36); setTimerState("idle"); }} />
-        <div className="rail-buttons"><Button variant="default" icon="speaker">Make announcement</Button><button className="refresh-button"><Icon name="reset" /></button></div>
+        <Timer timer={timer} state={timerState} setState={setTimerState} reset={() => { setTimer(24 * 60 + 36); setTimerState("idle"); }} isAdmin={isAdmin} />
+        <div className="rail-buttons">
+          {isAdmin ? (
+            <Button variant="default" icon="speaker">Make announcement</Button>
+          ) : (
+            <span className="admin-lock-tag"><Icon name="alert" size={12} /> Announcements Admin Only</span>
+          )}
+          <button className="refresh-button"><Icon name="reset" /></button>
+        </div>
         <Timeline />
       </aside>
     </div>
@@ -228,8 +502,27 @@ function Decor({ shape }: { shape: string }) {
   return <div className={`decor decor-${shape}`}>{shape === "eye" && <Icon name="eye" size={62} />}{shape === "shield" && <Icon name="shield" size={66} />}{shape === "triangle" && <Icon name="alert" size={120} />}</div>;
 }
 
-function ContestantDetails({ contestant, adjustPoints, onEvict }: { contestant: Contestant; adjustPoints: (id: number, amount: number) => void; onEvict: (c: Contestant) => void }) {
-  return <div className="detail-wrap"><Panel className="contestant-details"><div className="detail-head"><div><span>Contestant details</span><h2>{contestant.name}</h2><p>Team {contestant.team}</p></div><Avatar name={contestant.name} size="lg" index={contestant.id} /></div><div className="detail-score"><Metric value={contestant.points} label="House points" /><span className="id-pill">BB-{String(contestant.id).padStart(3, "0")}</span></div><div className="detail-chips"><Chip tone={statusTone[contestant.status]}>{contestant.status}</Chip><Chip tone={teamTone[contestant.team]}>Team {contestant.team}</Chip></div><dl><div><dt>Last task</dt><dd>Bridge Builder</dd></div><div><dt>Notes</dt><dd>Strong performance, calm leadership</dd></div><div><dt>Point history</dt><dd>+10 task bonus · 42 min ago</dd></div></dl></Panel><div className="detail-actions"><button onClick={() => adjustPoints(contestant.id, 10)}>+10</button><button onClick={() => adjustPoints(contestant.id, -10)}>−10</button><button>Custom</button><button><Icon name="crown" size={14} />Captain</button><button><Icon name="shield" size={14} />Immunity</button><button className={contestant.status === "Immune" ? "disabled" : ""} title={contestant.status === "Immune" ? "Immune contestants cannot be nominated" : ""}><Icon name="alert" size={14} />Nominate</button><button className="evict-action" onClick={() => onEvict(contestant)}>Evict</button></div></div>;
+function ContestantDetails({ contestant, adjustPoints, onEvict, isAdmin }: {
+  contestant: Contestant; adjustPoints: (id: number, amount: number) => void; onEvict: (c: Contestant) => void; isAdmin: boolean;
+}) {
+  return <div className="detail-wrap"><Panel className="contestant-details"><div className="detail-head"><div><span>Contestant details</span><h2>{contestant.name}</h2><p>Team {contestant.team}</p></div><Avatar name={contestant.name} size="lg" index={contestant.id} /></div><div className="detail-score"><Metric value={contestant.points} label="House points" /><span className="id-pill">BB-{String(contestant.id).padStart(3, "0")}</span></div><div className="detail-chips"><Chip tone={statusTone[contestant.status]}>{contestant.status}</Chip><Chip tone={teamTone[contestant.team]}>Team {contestant.team}</Chip></div><dl><div><dt>Last task</dt><dd>Bridge Builder</dd></div><div><dt>Notes</dt><dd>Strong performance, calm leadership</dd></div><div><dt>Point history</dt><dd>+10 task bonus · 42 min ago</dd></div></dl></Panel>
+  <div className="detail-actions">
+    {isAdmin ? (
+      <>
+        <button onClick={() => adjustPoints(contestant.id, 10)}>+10</button>
+        <button onClick={() => adjustPoints(contestant.id, -10)}>−10</button>
+        <button>Custom</button>
+        <button><Icon name="crown" size={14} />Captain</button>
+        <button><Icon name="shield" size={14} />Immunity</button>
+        <button className={contestant.status === "Immune" ? "disabled" : ""} title={contestant.status === "Immune" ? "Immune contestants cannot be nominated" : ""}><Icon name="alert" size={14} />Nominate</button>
+        <button className="evict-action" onClick={() => onEvict(contestant)}>Evict</button>
+      </>
+    ) : (
+      <div style={{ padding: "10px", width: "100%", textAlign: "center", color: "var(--muted)", fontSize: "12px" }}>
+        <Icon name="shield" size={14} /> View Only · Point changes & evictions restricted to Admin
+      </div>
+    )}
+  </div></div>;
 }
 
 function Timeline() {
@@ -263,36 +556,44 @@ function TaskList({ compact = false }: { compact?: boolean }) {
   return <Panel className={`task-list ${compact ? "task-list-compact" : ""}`}><SectionTitle title="House tasks" action={<Button variant="text">View all</Button>} /><div>{tasks.map((task, i) => <div className={`task-row ${i === 2 ? "completed" : ""}`} key={task.title}><span className="task-check">{i === 2 && <Icon name="check" size={14} />}</span><div><strong>{task.title}</strong><small>{task.meta}</small></div><Chip tone={task.tone}>{task.state}</Chip></div>)}</div></Panel>;
 }
 
-function Timer({ timer, state, setState, reset }: { timer: number; state: string; setState: (s: "idle" | "running" | "paused" | "done") => void; reset: () => void }) {
+function Timer({ timer, state, setState, reset, isAdmin = true }: {
+  timer: number; state: string; setState: (s: "idle" | "running" | "paused" | "done") => void; reset: () => void; isAdmin?: boolean;
+}) {
   const mm = String(Math.floor(timer / 60)).padStart(2, "0");
   const ss = String(timer % 60).padStart(2, "0");
-  return <Panel className={`timer-card timer-${state}`}><SectionTitle title="Task timer" subtitle="Current challenge" action={<Chip tone={state === "running" ? "success" : state === "done" ? "danger" : "info"}>{state === "done" ? "Time's up" : state}</Chip>} /><div className="timer-task">Bridge Builder</div><div className="timer-ring"><svg viewBox="0 0 140 140"><circle cx="70" cy="70" r="61" /><circle className="timer-progress" cx="70" cy="70" r="61" /></svg><div><strong>{mm}:{ss}</strong><span>MIN : SEC</span></div></div><div className="timer-actions"><Button variant="success" icon="play" onClick={() => setState("running")}>Start</Button><Button variant="warning" icon="pause" onClick={() => setState("paused")}>Pause</Button><Button variant="ghost" icon="reset" onClick={reset}>Reset</Button></div></Panel>;
+  return <Panel className={`timer-card timer-${state}`}><SectionTitle title="Task timer" subtitle="Current challenge" action={<Chip tone={state === "running" ? "success" : state === "done" ? "danger" : "info"}>{state === "done" ? "Time's up" : state}</Chip>} /><div className="timer-task">Bridge Builder</div><div className="timer-ring"><svg viewBox="0 0 140 140"><circle cx="70" cy="70" r="61" /><circle className="timer-progress" cx="70" cy="70" r="61" /></svg><div><strong>{mm}:{ss}</strong><span>MIN : SEC</span></div></div><div className="timer-actions">{isAdmin ? (<><Button variant="success" icon="play" onClick={() => setState("running")}>Start</Button><Button variant="warning" icon="pause" onClick={() => setState("paused")}>Pause</Button><Button variant="ghost" icon="reset" onClick={reset}>Reset</Button></>) : (<div style={{ color: "var(--muted)", fontSize: "11px", textAlign: "center", width: "100%" }}>Timer controls are Admin only</div>)}</div></Panel>;
 }
 
-function DangerZone({ nominees, onEvict, compact = false }: { nominees: Contestant[]; onEvict: (c: Contestant) => void; compact?: boolean }) {
-  return <Panel className={`danger-zone ${compact ? "danger-compact" : ""}`}><Decor shape="triangle" /><div className="danger-header"><div><Icon name="alert" /><div><strong>Danger zone:</strong><span>Eviction candidates</span></div></div><Chip tone="danger">{nominees.length} nominated</Chip></div>{nominees.length ? <div className="danger-list">{nominees.map((c) => <div className="danger-person" key={c.id}><Avatar name={c.name} size={compact ? "sm" : "lg"} index={c.id} /><div><strong>{c.name}</strong><span>Team {c.team} · {c.points} pts</span></div><Button variant="danger" onClick={() => onEvict(c)}>Evict</Button></div>)}</div> : <div className="empty-state"><Icon name="shield" size={30} /><strong>No one is in danger... yet.</strong></div>}</Panel>;
-}
-
-function ContestantsPage({ contestants, search, setSearch, filter, setFilter, adjustPoints, add, nominate, evict }: {
-  contestants: Contestant[]; search: string; setSearch: (s: string) => void; filter: string; setFilter: (s: string) => void; adjustPoints: (id: number, n: number) => void; add: () => void; nominate: (c: Contestant) => void; evict: (c: Contestant) => void;
+function DangerZone({ nominees, onEvict, compact = false, isAdmin = true }: {
+  nominees: Contestant[]; onEvict: (c: Contestant) => void; compact?: boolean; isAdmin?: boolean;
 }) {
-  return <div className="page"><PageHeading eyebrow="House directory" title="Contestants" text="Manage points, status, immunity, and house privileges." action={<Button variant="primary" icon="plus" onClick={add}>Add contestant</Button>} />
+  return <Panel className={`danger-zone ${compact ? "danger-compact" : ""}`}><Decor shape="triangle" /><div className="danger-header"><div><Icon name="alert" /><div><strong>Danger zone:</strong><span>Eviction candidates</span></div></div><Chip tone="danger">{nominees.length} nominated</Chip></div>{nominees.length ? <div className="danger-list">{nominees.map((c) => <div className="danger-person" key={c.id}><Avatar name={c.name} size={compact ? "sm" : "lg"} index={c.id} /><div><strong>{c.name}</strong><span>Team {c.team} · {c.points} pts</span></div>{isAdmin && <Button variant="danger" onClick={() => onEvict(c)}>Evict</Button>}</div>)}</div> : <div className="empty-state"><Icon name="shield" size={30} /><strong>No one is in danger... yet.</strong></div>}</Panel>;
+}
+
+function ContestantsPage({ contestants, search, setSearch, filter, setFilter, adjustPoints, add, nominate, evict, isAdmin }: {
+  contestants: Contestant[]; search: string; setSearch: (s: string) => void; filter: string; setFilter: (s: string) => void; adjustPoints: (id: number, n: number) => void; add: () => void; nominate: (c: Contestant) => void; evict: (c: Contestant) => void; isAdmin: boolean;
+}) {
+  return <div className="page"><PageHeading eyebrow="House directory" title="Contestants" text="Manage points, status, immunity, and house privileges." action={isAdmin ? <Button variant="primary" icon="plus" onClick={add}>Add contestant</Button> : undefined} />
     <div className="toolbar"><label className="search-box"><Icon name="search" /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search contestants..." /></label><div className="filter-chips">{["All", "Active", "Nominated", "Immune", "Evicted"].map((item) => <button className={filter === item ? "selected" : ""} onClick={() => setFilter(item)} key={item}>{item}</button>)}</div></div>
-    <div className="contestant-grid">{contestants.map((c) => <Panel className={`contestant-card ${c.status === "Evicted" ? "is-evicted" : ""} ${c.status === "Immune" ? "is-immune" : ""}`} key={c.id}>{c.status === "Evicted" && <div className="evicted-stamp">Evicted</div>}<div className="card-top"><Avatar name={c.name} size="lg" index={c.id} /><button className="icon-button"><Icon name="more" /></button></div><div className="contestant-name"><h3>{c.name}</h3><Chip tone={teamTone[c.team]}>Team {c.team}</Chip></div><div className="points-line"><div><strong>{c.points}</strong><span>House points</span></div><Chip tone={statusTone[c.status]} icon={c.status === "Immune" ? "shield" : c.status === "Captain" ? "crown" : undefined}>{c.status}</Chip></div><div className="point-buttons"><Button variant="success" onClick={() => adjustPoints(c.id, 10)} disabled={c.status === "Evicted"}>+10</Button><Button variant="ghost" onClick={() => adjustPoints(c.id, -10)} disabled={c.status === "Evicted"}>−10</Button><Button variant="ghost" disabled={c.status === "Evicted"}>Custom</Button></div><div className="card-actions"><Button variant="text" icon="crown" disabled={c.status === "Evicted"}>Captain</Button><Button variant="text" icon="shield" disabled={c.status === "Evicted"}>Immunity</Button><Button variant="text-danger" icon="alert" onClick={() => nominate(c)} disabled={c.status === "Evicted" || c.status === "Immune"}>Nominate</Button><Button variant="text-danger" icon="logout" onClick={() => evict(c)} disabled={c.status === "Evicted"}>Evict</Button></div></Panel>)}</div>
+    <div className="contestant-grid">{contestants.map((c) => <Panel className={`contestant-card ${c.status === "Evicted" ? "is-evicted" : ""} ${c.status === "Immune" ? "is-immune" : ""}`} key={c.id}>{c.status === "Evicted" && <div className="evicted-stamp">Evicted</div>}<div className="card-top"><Avatar name={c.name} size="lg" index={c.id} /><button className="icon-button"><Icon name="more" /></button></div><div className="contestant-name"><h3>{c.name}</h3><Chip tone={teamTone[c.team]}>Team {c.team}</Chip></div><div className="points-line"><div><strong>{c.points}</strong><span>House points</span></div><Chip tone={statusTone[c.status]} icon={c.status === "Immune" ? "shield" : c.status === "Captain" ? "crown" : undefined}>{c.status}</Chip></div><div className="point-buttons"><Button variant="success" onClick={() => adjustPoints(c.id, 10)} disabled={!isAdmin || c.status === "Evicted"}>+10</Button><Button variant="ghost" onClick={() => adjustPoints(c.id, -10)} disabled={!isAdmin || c.status === "Evicted"}>−10</Button><Button variant="ghost" disabled={!isAdmin || c.status === "Evicted"}>Custom</Button></div><div className="card-actions"><Button variant="text" icon="crown" disabled={!isAdmin || c.status === "Evicted"}>Captain</Button><Button variant="text" icon="shield" disabled={!isAdmin || c.status === "Evicted"}>Immunity</Button><Button variant="text-danger" icon="alert" onClick={() => nominate(c)} disabled={!isAdmin || c.status === "Evicted" || c.status === "Immune"}>Nominate</Button><Button variant="text-danger" icon="logout" onClick={() => evict(c)} disabled={!isAdmin || c.status === "Evicted"}>Evict</Button></div></Panel>)}</div>
   </div>;
 }
 
-function TasksPage({ timer, timerState, setTimerState, setTimer, addTask }: { timer: number; timerState: string; setTimerState: (s: "idle" | "running" | "paused" | "done") => void; setTimer: (n: number) => void; addTask: () => void }) {
-  return <div className="page"><PageHeading eyebrow="Challenge control" title="Tasks & Timer" text="Assign challenges, track progress, and control the house clock." action={<Button variant="primary" icon="plus" onClick={addTask}>Assign new task</Button>} /><div className="tasks-layout"><div><TaskList /><Panel className="task-detail"><SectionTitle title="Build a bridge from spaghetti" subtitle="In progress · started 18 minutes ago" action={<Chip tone="info">Team Alpha</Chip>} /><p>Build a free-standing bridge using only spaghetti, tape, and string. The structure must hold a 1kg weight for ten seconds.</p><div className="task-meta"><div><span>Reward</span><strong>50 points</strong></div><div><span>Duration</span><strong>45 minutes</strong></div><div><span>Assigned</span><strong>4 contestants</strong></div></div><Button variant="success" icon="check">Mark complete</Button></Panel></div><Timer timer={timer} state={timerState} setState={setTimerState} reset={() => { setTimer(24 * 60 + 36); setTimerState("idle"); }} /></div></div>;
+function TasksPage({ timer, timerState, setTimerState, setTimer, addTask, isAdmin }: {
+  timer: number; timerState: string; setTimerState: (s: "idle" | "running" | "paused" | "done") => void; setTimer: (n: number) => void; addTask: () => void; isAdmin: boolean;
+}) {
+  return <div className="page"><PageHeading eyebrow="Challenge control" title="Tasks & Timer" text="Assign challenges, track progress, and control the house clock." action={isAdmin ? <Button variant="primary" icon="plus" onClick={addTask}>Assign new task</Button> : undefined} /><div className="tasks-layout"><div><TaskList /><Panel className="task-detail"><SectionTitle title="Build a bridge from spaghetti" subtitle="In progress · started 18 minutes ago" action={<Chip tone="info">Team Alpha</Chip>} /><p>Build a free-standing bridge using only spaghetti, tape, and string. The structure must hold a 1kg weight for ten seconds.</p><div className="task-meta"><div><span>Reward</span><strong>50 points</strong></div><div><span>Duration</span><strong>45 minutes</strong></div><div><span>Assigned</span><strong>4 contestants</strong></div></div>{isAdmin && <Button variant="success" icon="check">Mark complete</Button>}</Panel></div><Timer timer={timer} state={timerState} setState={setTimerState} reset={() => { setTimer(24 * 60 + 36); setTimerState("idle"); }} isAdmin={isAdmin} /></div></div>;
 }
 
-function NominationsPage({ contestants, nominated, nominate, remove, evict }: { contestants: Contestant[]; nominated: Contestant[]; nominate: (c: Contestant) => void; remove: (id: number) => void; evict: (c: Contestant) => void }) {
+function NominationsPage({ contestants, nominated, nominate, remove, evict, isAdmin }: {
+  contestants: Contestant[]; nominated: Contestant[]; nominate: (c: Contestant) => void; remove: (id: number) => void; evict: (c: Contestant) => void; isAdmin: boolean;
+}) {
   const eligible = contestants.filter((c) => c.status !== "Nominated");
-  return <div className="page"><PageHeading eyebrow="Eviction control" title="Nominations" text="Nominate housemates and manage this week’s eviction list." /><div className="nomination-layout"><Panel className="nominate-panel"><SectionTitle title="Nominate a contestant" subtitle="Immune contestants cannot be nominated" /><div className="nominee-options">{eligible.map((c) => <button key={c.id} className={c.status === "Immune" ? "disabled" : ""} onClick={() => nominate(c)}><Avatar name={c.name} size="sm" index={c.id} /><span>{c.name}<small>Team {c.team}</small></span>{c.status === "Immune" ? <Icon name="shield" /> : <Icon name="plus" />}</button>)}</div></Panel><Panel className="nominees-panel"><SectionTitle title="Current nominees" subtitle={`${nominated.length} contestants face eviction`} /><div className="nominee-chips">{nominated.map((c) => <div><Avatar name={c.name} size="sm" index={c.id} /><span>{c.name}</span><button onClick={() => remove(c.id)}><Icon name="close" size={14} /></button></div>)}</div><div className="rule-note"><Icon name="shield" /><div><strong>Immunity rule</strong><p>Immune contestants are protected from nomination until the next cycle.</p></div></div></Panel></div><DangerZone nominees={nominated} onEvict={evict} /></div>;
+  return <div className="page"><PageHeading eyebrow="Eviction control" title="Nominations" text="Nominate housemates and manage this week’s eviction list." /><div className="nomination-layout"><Panel className="nominate-panel"><SectionTitle title="Nominate a contestant" subtitle={isAdmin ? "Immune contestants cannot be nominated" : "Nomination controls restricted to Admin"} /><div className="nominee-options">{eligible.map((c) => <button key={c.id} className={!isAdmin || c.status === "Immune" ? "disabled" : ""} onClick={() => isAdmin && nominate(c)} disabled={!isAdmin}><Avatar name={c.name} size="sm" index={c.id} /><span>{c.name}<small>Team {c.team}</small></span>{c.status === "Immune" ? <Icon name="shield" /> : <Icon name="plus" />}</button>)}</div></Panel><Panel className="nominees-panel"><SectionTitle title="Current nominees" subtitle={`${nominated.length} contestants face eviction`} /><div className="nominee-chips">{nominated.map((c) => <div><Avatar name={c.name} size="sm" index={c.id} /><span>{c.name}</span>{isAdmin && <button onClick={() => remove(c.id)}><Icon name="close" size={14} /></button>}</div>)}</div><div className="rule-note"><Icon name="shield" /><div><strong>Immunity rule</strong><p>Immune contestants are protected from nomination until the next cycle.</p></div></div></Panel></div><DangerZone nominees={nominated} onEvict={evict} isAdmin={isAdmin} /></div>;
 }
 
-function AnnouncementsPage({ announce }: { announce: () => void }) {
-  return <div className="page"><PageHeading eyebrow="Broadcast center" title="Announcements" text="Send house-wide messages and review broadcast history." action={<Button variant="primary" icon="speaker" onClick={announce}>New announcement</Button>} /><Panel className="feed"><SectionTitle title="Broadcast history" subtitle="All times shown in house time" />{[
+function AnnouncementsPage({ announce, isAdmin }: { announce: () => void; isAdmin: boolean }) {
+  return <div className="page"><PageHeading eyebrow="Broadcast center" title="Announcements" text="Send house-wide messages and review broadcast history." action={isAdmin ? <Button variant="primary" icon="speaker" onClick={announce}>New announcement</Button> : undefined} /><Panel className="feed"><SectionTitle title="Broadcast history" subtitle="All times shown in house time" />{[
     ["10:14 PM", "Housemates, the nomination window is now open.", "Big Boss"],
     ["08:30 PM", "The spaghetti bridge task has officially begun.", "Big Boss"],
     ["06:00 PM", "All housemates must gather in the living room.", "Production"],
