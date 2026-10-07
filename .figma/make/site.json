@@ -1,0 +1,10 @@
+{
+  "description": "Monitor and manage contestants in a reality show with real-time stats, task assignments, and live updates, empowering the Big Boss to control the game.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
