@@ -47,23 +47,27 @@ function sendJson(res, statusCode, data) {
   res.end(JSON.stringify(data));
 }
 
+// Allowlist of servable files, built from disk at startup. Requested URLs are
+// resolved to a normalized relative path and must match an entry exactly — no
+// request data ever reaches the filesystem directly.
+const staticFiles = new Map(); // normalized rel path (forward slashes) -> absolute path on disk
+(function walk(dir) {
+  for (const name of fs.readdirSync(dir)) {
+    const full = path.join(dir, name);
+    if (fs.statSync(full).isDirectory()) walk(full);
+    else staticFiles.set(path.relative(FRONTEND_DIR, full).split(path.sep).join('/'), full);
+  }
+})(FRONTEND_DIR);
+
 function serveStatic(req, res, filePath) {
-  let resolvedPath = path.join(FRONTEND_DIR, filePath === '/' ? 'index.html' : filePath);
-
-  if (!resolvedPath.startsWith(FRONTEND_DIR)) {
-    res.writeHead(403);
-    return res.end('Forbidden');
-  }
-
-  if (fs.existsSync(resolvedPath) && fs.statSync(resolvedPath).isDirectory()) {
-    resolvedPath = path.join(resolvedPath, 'index.html');
-  }
-
-  if (!fs.existsSync(resolvedPath)) {
+  // Request path is only ever used as a Map lookup key — request data never
+  // enters path.join/resolve or reaches the filesystem directly.
+  const rel = filePath === '/' ? 'index.html' : String(filePath).replace(/^\/+/, '');
+  const resolvedPath = staticFiles.get(rel);
+  if (resolvedPath === undefined) {
     res.writeHead(404, { 'Content-Type': 'text/plain' });
     return res.end('File Not Found');
   }
-
   const ext = path.extname(resolvedPath).toLowerCase();
   const mimeTypes = {
     '.html': 'text/html',
