@@ -5,7 +5,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const { createState, getContestant, getTask, stats, derive, avatarFor } = require('./store');
+const { createState, getContestant, getTask, stats, derive, avatarFor, addLog } = require('./store');
 
 const PORT = process.env.PORT || 4000;
 const FRONTEND_DIR = path.resolve(__dirname, '../frontend');
@@ -106,10 +106,23 @@ const server = http.createServer(async (req, res) => {
       tasks: state.tasks,
       announcements: state.announcements,
       timer: state.timer,
+      logs: state.logs,
       stats: stats(state),
       dangerZone: derived.dangerZone,
       leaderboard: derived.leaderboard,
     });
+  }
+
+  // 1b. GET /api/logs
+  if (req.method === 'GET' && pathname === '/api/logs') {
+    return sendJson(res, 200, state.logs || []);
+  }
+
+  // 1c. POST /api/logs
+  if (req.method === 'POST' && pathname === '/api/logs') {
+    const data = await parseJsonBody(req);
+    const item = addLog(state, data);
+    return sendJson(res, 201, item);
   }
 
   // 2. POST /api/contestants (Add Contestant)
@@ -149,6 +162,13 @@ const server = http.createServer(async (req, res) => {
     const data = await parseJsonBody(req);
     const delta = Number(data.delta) || 0;
     c.points += delta;
+    addLog(state, {
+      category: 'POINTS',
+      severity: delta > 0 ? 'success' : 'warning',
+      action: delta > 0 ? 'Points Awarded' : 'Points Deducted',
+      details: `${delta > 0 ? '+' : ''}${delta} points applied to ${c.name} (${c.team}).`,
+      target: c.name,
+    });
     return sendJson(res, 200, c);
   }
 
@@ -167,6 +187,13 @@ const server = http.createServer(async (req, res) => {
       } else {
         item.isCaptain = false;
       }
+    });
+    addLog(state, {
+      category: 'CAPTAIN',
+      severity: 'success',
+      action: 'House Captain Appointed',
+      details: `${c.name} crowned House Captain with immunity protection.`,
+      target: c.name,
     });
     return sendJson(res, 200, c);
   }
@@ -187,6 +214,13 @@ const server = http.createServer(async (req, res) => {
     }
 
     c.isNominated = true;
+    addLog(state, {
+      category: 'NOMINATION',
+      severity: 'warning',
+      action: 'Danger Zone Nomination',
+      details: `${c.name} (${c.team}) nominated for eviction and placed in Danger Zone.`,
+      target: c.name,
+    });
     return sendJson(res, 200, c);
   }
 
@@ -196,6 +230,13 @@ const server = http.createServer(async (req, res) => {
     const c = getContestant(state, id);
     if (!c) return sendJson(res, 404, { error: 'Contestant not found' });
     c.isNominated = false;
+    addLog(state, {
+      category: 'NOMINATION',
+      severity: 'info',
+      action: 'Nomination Revoked',
+      details: `${c.name} saved from Danger Zone.`,
+      target: c.name,
+    });
     return sendJson(res, 200, c);
   }
 
@@ -210,6 +251,13 @@ const server = http.createServer(async (req, res) => {
     if (c.isImmune && c.isNominated) {
       c.isNominated = false;
     }
+    addLog(state, {
+      category: 'IMMUNITY',
+      severity: 'success',
+      action: 'Immunity Shield Updated',
+      details: `${c.name} immunity shield set to ${c.isImmune}.`,
+      target: c.name,
+    });
     return sendJson(res, 200, c);
   }
 
@@ -223,6 +271,13 @@ const server = http.createServer(async (req, res) => {
     c.isCaptain = false;
     c.isImmune = false;
     c.isNominated = false;
+    addLog(state, {
+      category: 'EVICTION',
+      severity: 'critical',
+      action: 'Official Eviction Executed',
+      details: `CRITICAL: ${c.name} officially evicted from the house.`,
+      target: c.name,
+    });
     return sendJson(res, 200, c);
   }
 
@@ -239,6 +294,13 @@ const server = http.createServer(async (req, res) => {
       status: 'In Progress',
     };
     state.tasks.push(newTask);
+    addLog(state, {
+      category: 'TASK',
+      severity: 'info',
+      action: 'House Challenge Assigned',
+      details: `Task '${newTask.title}' assigned (${newTask.points} pts).`,
+      target: newTask.title,
+    });
     return sendJson(res, 201, newTask);
   }
 
@@ -251,6 +313,13 @@ const server = http.createServer(async (req, res) => {
     t.status = 'Completed';
     const c = getContestant(state, t.assignedTo);
     if (c) c.points += t.points;
+    addLog(state, {
+      category: 'TASK',
+      severity: 'success',
+      action: 'House Task Completed',
+      details: `Task '${t.title}' marked complete. +${t.points} points awarded to ${c ? c.name : 'assignee'}.`,
+      target: t.title,
+    });
     return sendJson(res, 200, { task: t, contestant: c });
   }
 
@@ -265,6 +334,13 @@ const server = http.createServer(async (req, res) => {
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
     };
     state.announcements.push(newA);
+    addLog(state, {
+      category: 'BROADCAST',
+      severity: 'critical',
+      action: 'Priority Broadcast Dispatched',
+      details: `House-wide message: "${newA.message}"`,
+      target: 'All Housemates',
+    });
     return sendJson(res, 201, newA);
   }
 

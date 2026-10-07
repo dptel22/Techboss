@@ -1,8 +1,14 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import type { ActivityLogEntry } from "./activityLog";
+import { initialActivityLogs, simulatedSurveillanceEvents, formatNow } from "./activityLog";
+import { ActivityLogPage, LiveActivityWidget } from "./ActivityLogComponents";
+import type { HouseNotification, NotificationCategory, NotificationSeverity } from "./notifications";
+import { initialNotifications, playNotificationSound } from "./notifications";
+import { NotificationDrawer } from "./NotificationComponents";
 
 type Team = "Alpha" | "Beta" | "Gamma" | "Delta";
 type Status = "Active" | "Nominated" | "Immune" | "Captain" | "Evicted";
-type Page = "Dashboard" | "Contestants" | "Tasks" | "Nominations" | "Announcements" | "Components";
+type Page = "Dashboard" | "Contestants" | "Tasks" | "Nominations" | "Announcements" | "Activity Log" | "Components";
 type Role = "admin" | "user";
 
 type AuthUser = {
@@ -77,6 +83,8 @@ const paths: Record<string, ReactNode> = {
   eye: <><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" /><circle cx="12" cy="12" r="3" /></>,
   close: <><line x1="6" y1="6" x2="18" y2="18" /><line x1="18" y1="6" x2="6" y2="18" /></>,
   sliders: <><line x1="4" y1="6" x2="20" y2="6" /><line x1="4" y1="12" x2="20" y2="12" /><line x1="4" y1="18" x2="20" y2="18" /></>,
+  activity: <><polyline points="22 12 18 12 15 21 9 3 6 12 2 12" /></>,
+  bell: <><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" /><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" /></>,
 };
 
 function Icon({ name, size = 18 }: { name: string; size?: number }) {
@@ -200,17 +208,156 @@ function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [evictedResult, setEvictedResult] = useState<string | null>(null);
 
+  const [logs, setLogs] = useState<ActivityLogEntry[]>(() => {
+    const saved = localStorage.getItem("techboss_activity_logs");
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {
+        // fallback
+      }
+    }
+    return initialActivityLogs;
+  });
+  const [isLogPaused, setIsLogPaused] = useState(false);
+
+  const [notifications, setNotifications] = useState<HouseNotification[]>(() => {
+    const saved = localStorage.getItem("techboss_notifications");
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {
+        // fallback
+      }
+    }
+    return initialNotifications;
+  });
+  const [notificationDrawerOpen, setNotificationDrawerOpen] = useState(false);
+  const [soundEnabled, setSoundEnabled] = useState(true);
+
+  useEffect(() => {
+    localStorage.setItem("techboss_notifications", JSON.stringify(notifications.slice(0, 50)));
+  }, [notifications]);
+
+  const unreadCount = useMemo(
+    () => notifications.filter((n) => !n.read).length,
+    [notifications]
+  );
+
+  const dispatchNotification = (
+    title: string,
+    message: string,
+    category: NotificationCategory,
+    severity: NotificationSeverity = "info"
+  ) => {
+    const newNotif: HouseNotification = {
+      id: `notif-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      category,
+      severity,
+      title,
+      message,
+      timestamp: "Just now",
+      read: false,
+    };
+    setNotifications((prev) => [newNotif, ...prev.slice(0, 49)]);
+    if (soundEnabled) {
+      playNotificationSound(severity);
+    }
+  };
+
+  const handleSimulateLiveDrama = () => {
+    const scenarios: { title: string; message: string; category: NotificationCategory; severity: NotificationSeverity }[] = [
+      {
+        title: "🚨 Emergency Evacuation Drill",
+        message: "Big Boss sounds the alarm: all contestants must gather immediately in the garden area.",
+        category: "BROADCAST",
+        severity: "urgent",
+      },
+      {
+        title: "⚡ Secret Mission Discovered",
+        message: "Anaya was spotted receiving a secret instruction envelope from the confession box.",
+        category: "SURVEILLANCE",
+        severity: "warning",
+      },
+      {
+        title: "🏆 Luxury Budget Credited",
+        message: "Team Beta executed the ration storage protocol without violations: +35 points awarded.",
+        category: "POINTS",
+        severity: "success",
+      },
+      {
+        title: "🔥 Nomination Confrontation",
+        message: "Tense argument between Dev and Kabir following secret ballot nomination results.",
+        category: "NOMINATION",
+        severity: "warning",
+      },
+      {
+        title: "📢 Daytime Sleeping Violation",
+        message: "Microphone sensor detected unauthorized daytime slumber. House total docked 15 points.",
+        category: "BROADCAST",
+        severity: "urgent",
+      },
+    ];
+    const chosen = scenarios[Math.floor(Math.random() * scenarios.length)];
+    dispatchNotification(chosen.title, chosen.message, chosen.category, chosen.severity);
+    setToast(chosen.title);
+    addLog({
+      category: chosen.category as any,
+      severity: chosen.severity === "urgent" ? "critical" : chosen.severity === "warning" ? "warning" : "info",
+      actor: "Big Boss Production",
+      action: chosen.title,
+      details: chosen.message,
+      target: "House Telemetry",
+    });
+  };
+
+  useEffect(() => {
+    localStorage.setItem("techboss_activity_logs", JSON.stringify(logs.slice(0, 100)));
+  }, [logs]);
+
+  const addLog = (entry: Omit<ActivityLogEntry, "id" | "timestamp" | "timeAgo">) => {
+    const newEntry: ActivityLogEntry = {
+      id: `log-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      timestamp: formatNow(),
+      timeAgo: "Just now",
+      ...entry,
+    };
+    setLogs((prev) => [newEntry, ...prev.slice(0, 99)]);
+  };
+
+  useEffect(() => {
+    if (isLogPaused) return;
+    const interval = window.setInterval(() => {
+      const randomEvent = simulatedSurveillanceEvents[Math.floor(Math.random() * simulatedSurveillanceEvents.length)];
+      addLog({
+        category: randomEvent.category,
+        severity: randomEvent.severity,
+        actor: randomEvent.actor,
+        action: randomEvent.action,
+        details: randomEvent.details,
+        target: randomEvent.target,
+      });
+    }, 9000);
+    return () => window.clearInterval(interval);
+  }, [isLogPaused]);
+
   useEffect(() => {
     if (timerState !== "running") return;
     const id = window.setInterval(() => setTimer((value) => {
       if (value <= 1) {
         setTimerState("done");
+        dispatchNotification(
+          "Task Timer Finished",
+          "The challenge countdown timer has reached zero! All house activities must cease immediately.",
+          "TIMER",
+          "urgent"
+        );
         return 0;
       }
       return value - 1;
     }), 1000);
     return () => window.clearInterval(id);
-  }, [timerState]);
+  }, [timerState, soundEnabled]);
 
   useEffect(() => {
     if (!toast) return;
@@ -225,6 +372,14 @@ function App() {
           setCurrentUser(u);
           localStorage.setItem("techboss_user", u.role);
           setToast(`Authenticated as ${u.name} (${u.role.toUpperCase()})`);
+          addLog({
+            category: "AUTH",
+            severity: "info",
+            actor: u.name,
+            action: "Portal Authentication",
+            details: `Logged into Command Center with ${u.title} privileges.`,
+            target: u.role,
+          });
         }}
       />
     );
@@ -233,6 +388,14 @@ function App() {
   const isAdmin = currentUser.role === "admin";
 
   const handleLogout = () => {
+    addLog({
+      category: "AUTH",
+      severity: "info",
+      actor: currentUser.name,
+      action: "Sign Out",
+      details: `${currentUser.name} signed out from Command Center.`,
+      target: currentUser.username,
+    });
     setCurrentUser(null);
     localStorage.removeItem("techboss_user");
     setToast("Signed out from Command Center");
@@ -244,6 +407,14 @@ function App() {
     setCurrentUser(nextUser);
     localStorage.setItem("techboss_user", nextRole);
     setToast(`Switched active role to ${nextUser.title} (${nextRole.toUpperCase()})`);
+    addLog({
+      category: "AUTH",
+      severity: "info",
+      actor: nextUser.name,
+      action: "Active Role Switched",
+      details: `Session role shifted to ${nextUser.title} (${nextRole.toUpperCase()}).`,
+      target: nextRole,
+    });
   };
 
   const active = contestants.filter((c) => c.status !== "Evicted");
@@ -258,8 +429,23 @@ function App() {
       setToast("Action denied: Admin privileges required to modify points");
       return;
     }
+    const targetC = contestants.find((c) => c.id === id);
     setContestants((items) => items.map((c) => c.id === id ? { ...c, points: c.points + amount } : c));
     setToast(`${amount > 0 ? "+" : ""}${amount} points applied`);
+    addLog({
+      category: "POINTS",
+      severity: amount > 0 ? "success" : "warning",
+      actor: currentUser.name,
+      action: amount > 0 ? "Points Awarded" : "Points Deducted",
+      details: `${amount > 0 ? "+" : ""}${amount} points applied to ${targetC?.name || "Contestant"} (Team ${targetC?.team || ""}).`,
+      target: targetC?.name,
+    });
+    dispatchNotification(
+      amount > 0 ? "Points Awarded" : "Points Deducted",
+      `${amount > 0 ? "+" : ""}${amount} points applied to ${targetC?.name || "Contestant"} (Team ${targetC?.team || ""}).`,
+      "POINTS",
+      amount > 0 ? "success" : "warning"
+    );
   };
 
   const evict = () => {
@@ -271,6 +457,20 @@ function App() {
     setContestants((items) => items.map((c) => c.id === selected.id ? { ...c, status: "Evicted" } : c));
     setModal(null);
     setEvictedResult(selected.name);
+    addLog({
+      category: "EVICTION",
+      severity: "critical",
+      actor: currentUser.name,
+      action: "Official Eviction Executed",
+      details: `CRITICAL: ${selected.name} has been officially evicted from the Tech House and archived.`,
+      target: selected.name,
+    });
+    dispatchNotification(
+      `Official Eviction: ${selected.name}`,
+      `${selected.name} has been officially evicted from the Tech House and archived.`,
+      "EVICTION",
+      "urgent"
+    );
   };
 
   const nominate = (contestant: Contestant) => {
@@ -284,6 +484,32 @@ function App() {
     }
     setContestants((items) => items.map((c) => c.id === contestant.id ? { ...c, status: "Nominated" } : c));
     setToast(`${contestant.name} moved to the Danger Zone`);
+    addLog({
+      category: "NOMINATION",
+      severity: "warning",
+      actor: currentUser.name,
+      action: "Danger Zone Nomination",
+      details: `${contestant.name} (Team ${contestant.team}) nominated for eviction and placed in Danger Zone.`,
+      target: contestant.name,
+    });
+    dispatchNotification(
+      `Nominated: ${contestant.name}`,
+      `${contestant.name} has entered the Danger Zone for eviction this week.`,
+      "NOMINATION",
+      "warning"
+    );
+  };
+
+  const handleSetTimerState = (st: "idle" | "running" | "paused" | "done") => {
+    setTimerState(st);
+    addLog({
+      category: "TIMER",
+      severity: st === "done" ? "warning" : "info",
+      actor: currentUser.name,
+      action: "Challenge Timer " + (st === "running" ? "Started" : st === "paused" ? "Paused" : st === "done" ? "Expired" : "Reset"),
+      details: `Challenge countdown timer set to ${st}.`,
+      target: "Challenge Clock",
+    });
   };
 
   return (
@@ -303,6 +529,8 @@ function App() {
           user={currentUser}
           onLogout={handleLogout}
           onToggleRole={handleToggleRole}
+          unreadCount={unreadCount}
+          onOpenNotifications={() => setNotificationDrawerOpen(true)}
         />
         <main>
           {page === "Dashboard" && (
@@ -314,11 +542,12 @@ function App() {
               adjustPoints={adjustPoints}
               timer={timer}
               timerState={timerState}
-              setTimerState={setTimerState}
+              setTimerState={handleSetTimerState}
               setTimer={setTimer}
               onEvict={(c) => { setSelected(c); setModal("evict"); }}
               user={currentUser}
               onToggleRole={handleToggleRole}
+              logs={logs}
             />
           )}
           {page === "Contestants" && (
@@ -339,7 +568,7 @@ function App() {
             <TasksPage
               timer={timer}
               timerState={timerState}
-              setTimerState={setTimerState}
+              setTimerState={handleSetTimerState}
               setTimer={setTimer}
               addTask={() => setModal("task")}
               isAdmin={isAdmin}
@@ -350,7 +579,20 @@ function App() {
               contestants={active}
               nominated={nominated}
               nominate={nominate}
-              remove={(id) => setContestants((items) => items.map((c) => c.id === id ? { ...c, status: "Active" } : c))}
+              remove={(id) => {
+                const c = contestants.find((item) => item.id === id);
+                setContestants((items) => items.map((item) => item.id === id ? { ...item, status: "Active" } : item));
+                if (c) {
+                  addLog({
+                    category: "NOMINATION",
+                    severity: "info",
+                    actor: currentUser.name,
+                    action: "Nomination Revoked",
+                    details: `${c.name} was saved from the Danger Zone.`,
+                    target: c.name,
+                  });
+                }
+              }}
               evict={(c) => { setSelected(c); setModal("evict"); }}
               isAdmin={isAdmin}
             />
@@ -361,17 +603,141 @@ function App() {
               isAdmin={isAdmin}
             />
           )}
+          {page === "Activity Log" && (
+            <ActivityLogPage
+              logs={logs}
+              isAdmin={isAdmin}
+              isPaused={isLogPaused}
+              onTogglePause={() => setIsLogPaused((p) => !p)}
+              onClearLogs={() => setLogs([])}
+              onInjectTestEvent={() => {
+                const randomEvent = simulatedSurveillanceEvents[Math.floor(Math.random() * simulatedSurveillanceEvents.length)];
+                addLog({
+                  category: randomEvent.category,
+                  severity: randomEvent.severity,
+                  actor: `${currentUser.name} (Manual Test)`,
+                  action: `[TEST] ${randomEvent.action}`,
+                  details: randomEvent.details,
+                  target: randomEvent.target,
+                });
+                setToast("Test surveillance event injected into live stream");
+              }}
+              onToggleRole={handleToggleRole}
+            />
+          )}
           {page === "Components" && <ComponentsPage />}
         </main>
       </div>
       <MobileNav page={page} setPage={setPage} />
-      {modal === "announcement" && <AnnouncementModal value={announcement} setValue={setAnnouncement} close={() => setModal(null)} broadcast={() => { setBroadcast(announcement || "Attention housemates. Please gather in the living room."); setModal(null); }} />}
-      {modal === "contestant" && <SimpleModal title="Add contestant" close={() => setModal(null)} confirmLabel="Add contestant" onConfirm={() => { setModal(null); setToast("New contestant added"); }}><Field label="Full name" placeholder="Enter contestant name" /><Field label="Team" placeholder="Select team" /><Field label="Starting points" placeholder="0" /></SimpleModal>}
-      {modal === "task" && <SimpleModal title="Assign new task" close={() => setModal(null)} confirmLabel="Assign task" onConfirm={() => { setModal(null); setToast("Task assigned successfully"); }}><Field label="Task title" placeholder="Enter task title" /><Field label="Assign to" placeholder="Choose team or contestants" /><div className="field-row"><Field label="Reward points" placeholder="50" /><Field label="Duration" placeholder="30 min" /></div></SimpleModal>}
+      {modal === "announcement" && (
+        <AnnouncementModal
+          value={announcement}
+          setValue={setAnnouncement}
+          close={() => setModal(null)}
+          broadcast={() => {
+            const text = announcement || "Attention housemates. Please gather in the living room.";
+            setBroadcast(text);
+            setModal(null);
+            addLog({
+              category: "BROADCAST",
+              severity: "critical",
+              actor: currentUser.name,
+              action: "Emergency Broadcast Dispatched",
+              details: `House-wide audio/visual takeover dispatched: "${text}"`,
+              target: "All Housemates",
+            });
+            dispatchNotification(
+              "Big Boss Announcement",
+              text,
+              "BROADCAST",
+              "urgent"
+            );
+          }}
+        />
+      )}
+      {modal === "contestant" && (
+        <SimpleModal
+          title="Add contestant"
+          close={() => setModal(null)}
+          confirmLabel="Add contestant"
+          onConfirm={() => {
+            setModal(null);
+            setToast("New contestant added");
+            addLog({
+              category: "CONTESTANT",
+              severity: "info",
+              actor: currentUser.name,
+              action: "New Contestant Added",
+              details: "New contestant registered into the house roster.",
+            });
+            dispatchNotification(
+              "New Contestant Enrolled",
+              "A new contestant has been admitted to the house roster.",
+              "SYSTEM",
+              "info"
+            );
+          }}
+        >
+          <Field label="Full name" placeholder="Enter contestant name" />
+          <Field label="Team" placeholder="Select team" />
+          <Field label="Starting points" placeholder="0" />
+        </SimpleModal>
+      )}
+      {modal === "task" && (
+        <SimpleModal
+          title="Assign new task"
+          close={() => setModal(null)}
+          confirmLabel="Assign task"
+          onConfirm={() => {
+            setModal(null);
+            setToast("Task assigned successfully");
+            addLog({
+              category: "TASK",
+              severity: "info",
+              actor: currentUser.name,
+              action: "Task Assigned",
+              details: "New challenge task created and assigned to housemates.",
+            });
+            dispatchNotification(
+              "New Task Assigned",
+              "A new challenge task has been scheduled on the house board.",
+              "TASK",
+              "info"
+            );
+          }}
+        >
+          <Field label="Task title" placeholder="Enter task title" />
+          <Field label="Assign to" placeholder="Choose team or contestants" />
+          <div className="field-row">
+            <Field label="Reward points" placeholder="50" />
+            <Field label="Duration" placeholder="30 min" />
+          </div>
+        </SimpleModal>
+      )}
       {modal === "evict" && selected && <EvictionModal contestant={selected} close={() => setModal(null)} confirm={evict} />}
       {broadcast && <AnnouncementOverlay message={broadcast} dismiss={() => setBroadcast("")} />}
       {evictedResult && <EvictionResult name={evictedResult} close={() => setEvictedResult(null)} />}
       {toast && <div className="toast"><span className="toast-icon"><Icon name="check" size={15} /></span><div><strong>Big Boss update</strong><p>{toast}</p></div><button className="icon-button" onClick={() => setToast(null)} aria-label="Close"><Icon name="close" size={16} /></button></div>}
+      <NotificationDrawer
+        notifications={notifications}
+        isOpen={notificationDrawerOpen}
+        onClose={() => setNotificationDrawerOpen(false)}
+        onMarkAsRead={(id) =>
+          setNotifications((prev) =>
+            prev.map((n) => (n.id === id ? { ...n, read: true } : n))
+          )
+        }
+        onMarkAllAsRead={() =>
+          setNotifications((prev) => prev.map((n) => ({ ...n, read: true })))
+        }
+        onClearAll={() => setNotifications([])}
+        onDismiss={(id) =>
+          setNotifications((prev) => prev.filter((n) => n.id !== id))
+        }
+        onSimulateEvent={handleSimulateLiveDrama}
+        soundEnabled={soundEnabled}
+        onToggleSound={() => setSoundEnabled((prev) => !prev)}
+      />
     </div>
   );
 }
@@ -380,9 +746,14 @@ function Sidebar({ page, setPage, open, close, user, onLogout }: {
   page: Page; setPage: (p: Page) => void; open: boolean; close: () => void;
   user: AuthUser; onLogout: () => void;
 }) {
-  const items: { label: Page; icon: string }[] = [
-    { label: "Dashboard", icon: "grid" }, { label: "Contestants", icon: "users" }, { label: "Tasks", icon: "tasks" },
-    { label: "Nominations", icon: "target" }, { label: "Announcements", icon: "speaker" }, { label: "Components", icon: "sliders" },
+  const items: { label: Page; icon: string; adminOnly?: boolean }[] = [
+    { label: "Dashboard", icon: "grid" },
+    { label: "Contestants", icon: "users" },
+    { label: "Tasks", icon: "tasks" },
+    { label: "Nominations", icon: "target" },
+    { label: "Announcements", icon: "speaker" },
+    { label: "Activity Log", icon: "activity", adminOnly: true },
+    { label: "Components", icon: "sliders" },
   ];
   return <aside className={`sidebar ${open ? "sidebar-open" : ""}`}>
     <div className="brand"><div><strong>bigboss</strong><span>command center</span></div><button className="collapse-button"><Icon name="close" size={14} /></button></div>
@@ -391,46 +762,110 @@ function Sidebar({ page, setPage, open, close, user, onLogout }: {
         {user.role === "admin" ? "👑 Admin Access" : "👤 Viewer Access"}
       </span>
     </div>
-    <nav><span className="nav-label">General</span>{items.slice(0, 2).map((item) => <button key={item.label} className={page === item.label ? "active" : ""} onClick={() => { setPage(item.label); close(); }}><Icon name={item.icon} /><span>{item.label}</span></button>)}<span className="nav-label">House tools</span>{items.slice(2).map((item) => <button key={item.label} className={page === item.label ? "active" : ""} onClick={() => { setPage(item.label); close(); }}><Icon name={item.icon} /><span>{item.label}</span>{item.label === "Nominations" && <b>3</b>}</button>)}</nav>
+    <nav>
+      <span className="nav-label">General</span>
+      {items.slice(0, 2).map((item) => (
+        <button key={item.label} className={page === item.label ? "active" : ""} onClick={() => { setPage(item.label); close(); }}>
+          <Icon name={item.icon} /><span>{item.label}</span>
+        </button>
+      ))}
+      <span className="nav-label">House tools</span>
+      {items.slice(2).map((item) => {
+        const isLocked = item.adminOnly && user.role !== "admin";
+        return (
+          <button
+            key={item.label}
+            className={`${page === item.label ? "active" : ""} ${isLocked ? "nav-locked" : ""}`}
+            onClick={() => { setPage(item.label); close(); }}
+            title={isLocked ? "Admin Clearance Required" : undefined}
+          >
+            <Icon name={item.icon} />
+            <span>{item.label}</span>
+            {item.label === "Nominations" && <b>3</b>}
+            {item.label === "Activity Log" && <span className="live-dot" style={{ marginLeft: "auto", width: "6px", height: "6px" }} />}
+          </button>
+        );
+      })}
+    </nav>
     <div className="side-status"><span className="live-dot" /><div><strong>House systems</strong><small>All systems operational</small></div></div>
     <button className="side-logout" onClick={onLogout}><Icon name="logout" /><span>Sign out ({user.username})</span></button>
   </aside>;
 }
 
-function Topbar({ openMenu, announce, user, onLogout, onToggleRole }: {
-  openMenu: () => void; announce: () => void;
-  user: AuthUser; onLogout: () => void; onToggleRole: () => void;
+function Topbar({
+  openMenu,
+  announce,
+  user,
+  onLogout,
+  onToggleRole,
+  unreadCount,
+  onOpenNotifications,
+}: {
+  openMenu: () => void;
+  announce: () => void;
+  user: AuthUser;
+  onLogout: () => void;
+  onToggleRole: () => void;
+  unreadCount: number;
+  onOpenNotifications: () => void;
 }) {
-  return <header className="topbar">
-    <button className="menu-button" onClick={openMenu}><Icon name="sliders" /></button>
-    <div className="global-search"><button><Icon name="search" /></button><input placeholder="Search the house..." /><div><span>Contestants</span><span>Tasks</span><span>Announcements</span></div></div>
-    <div className="top-actions">
-      <span className={`role-badge ${user.role}`}>
-        {user.role === "admin" ? "👑 ADMIN" : "👤 VIEWER"}
-      </span>
-      <button className="role-toggle-btn" onClick={onToggleRole} title="Quick Switch Role">
-        <Icon name="sliders" size={13} />
-        <span>Switch to {user.role === "admin" ? "User" : "Admin"}</span>
+  return (
+    <header className="topbar">
+      <button className="menu-button" onClick={openMenu}>
+        <Icon name="sliders" />
       </button>
-      {user.role === "admin" && (
-        <button className="top-circle" onClick={announce} title="Make Announcement">
-          <Icon name="speaker" />
+      <div className="global-search">
+        <button>
+          <Icon name="search" />
         </button>
-      )}
-      <button className="top-circle profile-circle" title={`${user.name} (${user.role})`}>
-        {user.avatarSeed}
-      </button>
-      <button className="top-circle" onClick={onLogout} title="Sign Out">
-        <Icon name="logout" />
-      </button>
-    </div>
-  </header>;
+        <input placeholder="Search the house..." />
+        <div>
+          <span>Contestants</span>
+          <span>Tasks</span>
+          <span>Announcements</span>
+        </div>
+      </div>
+      <div className="top-actions">
+        <span className={`role-badge ${user.role}`}>
+          {user.role === "admin" ? "👑 ADMIN" : "👤 VIEWER"}
+        </span>
+        <button className="role-toggle-btn" onClick={onToggleRole} title="Quick Switch Role">
+          <Icon name="sliders" size={13} />
+          <span>Switch to {user.role === "admin" ? "User" : "Admin"}</span>
+        </button>
+        {user.role === "admin" && (
+          <button className="top-circle" onClick={announce} title="Make Announcement">
+            <Icon name="speaker" />
+          </button>
+        )}
+        <button
+          className="top-circle notification-bell-btn"
+          onClick={onOpenNotifications}
+          title="Event Notifications"
+          aria-label="Event Notifications"
+        >
+          <Icon name="bell" />
+          {unreadCount > 0 && (
+            <span className="notification-count-badge">
+              {unreadCount > 9 ? "9+" : unreadCount}
+            </span>
+          )}
+        </button>
+        <button className="top-circle profile-circle" title={`${user.name} (${user.role})`}>
+          {user.avatarSeed}
+        </button>
+        <button className="top-circle" onClick={onLogout} title="Sign Out">
+          <Icon name="logout" />
+        </button>
+      </div>
+    </header>
+  );
 }
 
-function Dashboard({ contestants, sorted, nominated, setPage, adjustPoints, timer, timerState, setTimerState, setTimer, onEvict, user, onToggleRole }: {
+function Dashboard({ contestants, sorted, nominated, setPage, adjustPoints, timer, timerState, setTimerState, setTimer, onEvict, user, onToggleRole, logs }: {
   contestants: Contestant[]; sorted: Contestant[]; nominated: Contestant[]; setPage: (p: Page) => void; adjustPoints: (id: number, amount: number) => void;
   timer: number; timerState: string; setTimerState: (s: "idle" | "running" | "paused" | "done") => void; setTimer: (n: number) => void; onEvict: (c: Contestant) => void;
-  user: AuthUser; onToggleRole: () => void;
+  user: AuthUser; onToggleRole: () => void; logs: ActivityLogEntry[];
 }) {
   const [focused, setFocused] = useState(sorted[0]);
   const isAdmin = user.role === "admin";
@@ -484,6 +919,7 @@ function Dashboard({ contestants, sorted, nominated, setPage, adjustPoints, time
           )}
           <button className="refresh-button"><Icon name="reset" /></button>
         </div>
+        <LiveActivityWidget logs={logs} onViewAll={() => setPage("Activity Log")} />
         <Timeline />
       </aside>
     </div>
@@ -630,7 +1066,13 @@ function EvictionResult({ name, close }: { name: string; close: () => void }) {
 }
 
 function MobileNav({ page, setPage }: { page: Page; setPage: (p: Page) => void }) {
-  const items: { label: Page; icon: string; short: string }[] = [{ label: "Dashboard", icon: "grid", short: "Home" }, { label: "Contestants", icon: "users", short: "House" }, { label: "Tasks", icon: "tasks", short: "Tasks" }, { label: "Nominations", icon: "alert", short: "Danger" }];
+  const items: { label: Page; icon: string; short: string }[] = [
+    { label: "Dashboard", icon: "grid", short: "Home" },
+    { label: "Contestants", icon: "users", short: "House" },
+    { label: "Tasks", icon: "tasks", short: "Tasks" },
+    { label: "Nominations", icon: "alert", short: "Danger" },
+    { label: "Activity Log", icon: "activity", short: "Logs" },
+  ];
   return <nav className="mobile-nav">{items.map((item) => <button className={page === item.label ? "active" : ""} onClick={() => setPage(item.label)} key={item.label}><Icon name={item.icon} /><span>{item.short}</span></button>)}</nav>;
 }
 

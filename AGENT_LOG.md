@@ -1,5 +1,29 @@
 # TechBoss Agent Collaboration Log
 
+## [2026-10-07 14:25] — Gemini (Real-Time Activity Log Implementation in Admin Portal)
+- **Status:** Complete & Verified
+- **Completed:**
+  - Implemented full Real-Time Activity Log architecture integrated with Role-Based Access Control:
+    1. **Data Model & Utilities (`src/activityLog.ts`)**:
+       - Multi-category taxonomy: `POINTS`, `NOMINATION`, `EVICTION`, `CAPTAIN`, `IMMUNITY`, `TASK`, `TIMER`, `BROADCAST`, `CONTESTANT`, `AUTH`, `SURVEILLANCE`.
+       - Five-tier severity levels: `critical`, `danger`, `warning`, `success`, `info`.
+       - Seeded realistic audit trail reflecting recent house interactions and RBAC setup.
+       - Live simulation engine generating realistic telemetry/surveillance pulses every 9 seconds.
+       - Export helpers for 1-click CSV and JSON downloads.
+    2. **Admin Portal UI Components (`src/ActivityLogComponents.tsx`)**:
+       - `ActivityLogPage`: Dedicated surveillance audit terminal with live pulsing badge (`🔴 LIVE FEED ACTIVE`), stream pause/resume toggle, manual test event injector, CSV/JSON export, clear logs, metric cards, search query filter, category filters, and severity filters.
+       - Role-Based Security: Viewers attempting to view the activity log see an access-restricted screen explaining admin clearance requirements with a 1-click admin switch button.
+       - `LiveActivityWidget`: Compact live activity ticker embedded in the main Admin Dashboard rail for immediate situational awareness.
+    3. **Application & Action Hooks (`src/App.tsx` & `src/index.css`)**:
+       - Wired automatic log emission into point changes, evictions, nominations, revocations, broadcasts, timer controls, contestant inductions, task creations, and role switching.
+       - Styled with high-contrast surveillance aesthetic, glow effects, monospace timestamps, and responsive grid layout.
+    4. **Backend REST Synchronization (`backend/store.js` & `backend/server.js`)**:
+       - Added `state.logs` array and `addLog` helper.
+       - Added `GET /api/logs` and `POST /api/logs` endpoints.
+       - Recorded activity log events across all backend REST mutations.
+- **Verification:**
+  - Vite build passed cleanly (`pnpm run build` completed with zero errors).
+
 ## [2026-10-07 14:00] — Gemini (Role-Based Access Control & Login Implementation)
 - **Status:** Complete & Verified
 - **Completed:**

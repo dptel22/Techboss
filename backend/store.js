@@ -44,7 +44,71 @@ function createState() {
     { id: 'a2', message: 'Nominations are now OPEN. Immune contestants cannot be nominated.', priority: 'urgent', timestamp: '10:12 AM' },
   ];
 
+  state.logs = [
+    {
+      id: 'l1',
+      timestamp: '14:00:45',
+      timeAgo: '9m ago',
+      category: 'AUTH',
+      severity: 'info',
+      actor: 'Security Engine',
+      action: 'Role-Based Access Control Initialized',
+      details: 'RBAC security layer active. Dual role permissions verified.',
+      target: 'System Gateway',
+    },
+    {
+      id: 'l2',
+      timestamp: '13:54:12',
+      timeAgo: '15m ago',
+      category: 'POINTS',
+      severity: 'success',
+      actor: 'Big Boss Director',
+      action: 'Points Awarded',
+      details: '+30 points awarded to Arjun Singhania (Cyber Cobras).',
+      target: 'Arjun Singhania',
+    },
+    {
+      id: 'l3',
+      timestamp: '13:42:00',
+      timeAgo: '27m ago',
+      category: 'CAPTAIN',
+      severity: 'success',
+      actor: 'Big Boss Director',
+      action: 'House Captain Appointed',
+      details: 'Arjun Singhania crowned House Captain with immunity.',
+      target: 'Arjun Singhania',
+    },
+    {
+      id: 'l4',
+      timestamp: '13:30:18',
+      timeAgo: '39m ago',
+      category: 'NOMINATION',
+      severity: 'warning',
+      actor: 'Big Boss Director',
+      action: 'Danger Zone Nomination',
+      details: 'Kabir Mehra nominated to the Danger Zone.',
+      target: 'Kabir Mehra',
+    },
+  ];
+
   return state;
+}
+
+function addLog(state, entry) {
+  const logItem = {
+    id: 'l' + (Date.now()),
+    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+    timeAgo: 'Just now',
+    category: entry.category || 'SYSTEM',
+    severity: entry.severity || 'info',
+    actor: entry.actor || 'Big Boss Director',
+    action: entry.action || 'Admin Action',
+    details: entry.details || '',
+    target: entry.target || '',
+  };
+  state.logs.unshift(logItem);
+  if (state.logs.length > 100) state.logs.pop();
+  return logItem;
 }
 
 const getContestant = (state, id) => state.contestants.find(c => c.id === id);
@@ -79,4 +143,4 @@ function derive(state) {
   };
 }
 
-module.exports = { createState, getContestant, getTask, stats, derive, esc, avatarFor };
+module.exports = { createState, getContestant, getTask, stats, derive, esc, avatarFor, addLog };
