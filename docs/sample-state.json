@@ -1,0 +1,158 @@
+{
+  "contestants": [
+    {
+      "id": "c1",
+      "name": "Arjun Singhania",
+      "team": "Cyber Cobras",
+      "points": 350,
+      "status": "Active",
+      "isCaptain": true,
+      "isImmune": true,
+      "isNominated": false,
+      "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=Arjun"
+    },
+    {
+      "id": "c2",
+      "name": "Priya Sharma",
+      "team": "Neural Ninjas",
+      "points": 310,
+      "status": "Active",
+      "isCaptain": false,
+      "isImmune": false,
+      "isNominated": false,
+      "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=Priya"
+    },
+    {
+      "id": "c3",
+      "name": "Kabir Mehra",
+      "team": "Byte Brawlers",
+      "points": 260,
+      "status": "Active",
+      "isCaptain": false,
+      "isImmune": false,
+      "isNominated": true,
+      "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=Kabir"
+    },
+    {
+      "id": "c4",
+      "name": "Ananya Roy",
+      "team": "Neural Ninjas",
+      "points": 230,
+      "status": "Active",
+      "isCaptain": false,
+      "isImmune": true,
+      "isNominated": false,
+      "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=Ananya"
+    },
+    {
+      "id": "c5",
+      "name": "Rohan Verma",
+      "team": "Cyber Cobras",
+      "points": 195,
+      "status": "Active",
+      "isCaptain": false,
+      "isImmune": false,
+      "isNominated": true,
+      "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=Rohan"
+    },
+    {
+      "id": "c6",
+      "name": "Tanvi Deshmukh",
+      "team": "Byte Brawlers",
+      "points": 180,
+      "status": "Active",
+      "isCaptain": false,
+      "isImmune": false,
+      "isNominated": false,
+      "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=Tanvi"
+    },
+    {
+      "id": "c7",
+      "name": "Vikram Rathore",
+      "team": "Cyber Cobras",
+      "points": 140,
+      "status": "Active",
+      "isCaptain": false,
+      "isImmune": false,
+      "isNominated": true,
+      "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=Vikram"
+    },
+    {
+      "id": "c8",
+      "name": "Sneha Kulkarni",
+      "team": "Neural Ninjas",
+      "points": 110,
+      "status": "Active",
+      "isCaptain": false,
+      "isImmune": false,
+      "isNominated": false,
+      "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=Sneha"
+    },
+    {
+      "id": "c9",
+      "name": "Devansh Joshi",
+      "team": "Byte Brawlers",
+      "points": 45,
+      "status": "Evicted",
+      "isCaptain": false,
+      "isImmune": false,
+      "isNominated": false,
+      "avatar": "https://api.dicebear.com/7.x/bottts/svg?seed=Devansh"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "t1",
+      "title": "Hack the Firewall Challenge",
+      "description": "Bypass 3 layers of defensive encryption in 2 minutes",
+      "assignedTo": "c2",
+      "points": 50,
+      "status": "In Progress"
+    },
+    {
+      "id": "t2",
+      "title": "Ration Inventory Audit",
+      "description": "Catalog food provisions and lock kitchen pantry",
+      "assignedTo": "c3",
+      "points": 30,
+      "status": "Pending"
+    },
+    {
+      "id": "t3",
+      "title": "Secret Room Mystery Puzzle",
+      "description": "Decode binary transmission on the main terminal",
+      "assignedTo": "c1",
+      "points": 80,
+      "status": "Completed"
+    }
+  ],
+  "announcements": [
+    {
+      "id": "a1",
+      "message": "Bigg Boss chahte hain ki sabhi sadasya living area mein ekatrith ho jayein!",
+      "priority": "critical",
+      "timestamp": "10:00 AM"
+    },
+    {
+      "id": "a2",
+      "message": "Nominations are now OPEN. Immune contestants cannot be nominated.",
+      "priority": "urgent",
+      "timestamp": "10:12 AM"
+    }
+  ],
+  "timer": {
+    "duration": 300,
+    "remaining": 215,
+    "status": "running"
+  },
+  "stats": {
+    "highestScorer": { "name": "Arjun Singhania", "points": 350 },
+    "lowestScorer": { "name": "Sneha Kulkarni", "points": 110 },
+    "totalContestants": 9,
+    "activeContestants": 8,
+    "evictedCount": 1,
+    "nominatedCount": 3,
+    "completedTasks": 1,
+    "totalTasks": 3
+  }
+}

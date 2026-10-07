@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>TechBoss — Big Boss Digital Command Center</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+  <!-- Top Header & Live Broadcast Ticker (Feature 9) -->
+  <header class="header-container">
+    <div class="top-bar">
+      <div class="brand-section">
+        <div class="bb-eye" title="Big Boss Eye is watching">
+          <div class="bb-eye-iris"></div>
+        </div>
+        <div>
+          <div class="brand-title">TechBoss Command Center</div>
+          <div style="font-size: 0.72rem; color: var(--text-muted); font-family: var(--font-mono);">
+            MISSION CLOCK ACTIVE • SYSTEM PROTOCOL 2.4
+          </div>
+        </div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 14px;">
+        <span class="brand-badge">● SURVEILLANCE ACTIVE</span>
+        <button class="btn btn-warning btn-sm" id="btn-quick-broadcast">
+          ⚡ Trigger Broadcast
+        </button>
+      </div>
+    </div>
+
+    <!-- Announcement Bar (Feature 9) -->
+    <div class="announcement-ticker" id="announcement-ticker-container">
+      <!-- Injected by announcements.js -->
+    </div>
+  </header>
+
+  <!-- Main Command Center Grid -->
+  <main class="main-dashboard">
+
+    <!-- Left Column: Timer, Danger Zone, Nominations Desk -->
+    <div class="col-left">
+      <!-- Feature 10: Task Timer -->
+      <section id="timer-widget-container"></section>
+
+      <!-- Feature 8: Danger Zone -->
+      <section id="danger-zone-container"></section>
+
+      <!-- Feature 6 & 7: Nomination & Immunity Desk -->
+      <section id="nominations-desk-container"></section>
+    </div>
+
+    <!-- Center Column: Contestants Roster Grid, Points (+/-), Captaincy & Eviction -->
+    <div class="col-center">
+      <!-- Feature 1, 4, 5, 12: Contestant Grid -->
+      <section id="contestants-grid-container"></section>
+
+      <!-- Feature 3: Task Operations -->
+      <section id="tasks-container"></section>
+    </div>
+
+    <!-- Right Column: Live Leaderboard & House Statistics -->
+    <div class="col-right">
+      <!-- Feature 2: Live Leaderboard -->
+      <section id="leaderboard-container"></section>
+
+      <!-- Feature 11: House Statistics -->
+      <section id="stats-container"></section>
+    </div>
+
+  </main>
+
+  <!-- Toast Notification Container -->
+  <div id="toast-container" class="toast-container"></div>
+
+  <!-- Application Scripts: Connects all 12 Features -->
+  <script src="js/main.js"></script>
+</body>
+</html>
